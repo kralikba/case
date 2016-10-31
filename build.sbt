@@ -1,11 +1,10 @@
 name := "fancycase"
 
-addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+addCompilerPlugin("org.scalamacros" % "paradise" % "3.0.0-M4" cross CrossVersion.full)
 
 lazy val fancycase = project in file(".") settings Seq(
 	scalaVersion := "2.11.8",
-	organization := "com.transpaygo"
+	organization := "com.fonmoney"
 )
 
-
-libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" % _)
+libraryDependencies += "org.scalameta" %% "scalameta" % "1.2.0"
