@@ -78,10 +78,15 @@ object A extends FancyTraitCompanion[A] {
 
 /** is equivalent to */
 
-case class C(f : Boolean, i : Int, s : String, l : Long, j : Int, k : Int) extends  Q with A with B {
+case class C(f : Boolean, i : Int, s : String, l : Long, j : Int, k : Int) extends Q with A with B {
   type Self = C
 
   override def withA(i : Int, s : String) = copy(i = i, s = s)
   override def withQ(l : Long) = copy(l = l)
   override def withB(j : Int, k : Int) = copy(j = j, k = k)
+}
+object C {
+  def fromComponents(f : Boolean, A : A, Q : Q, B : B) = {
+    C(f, A.i, A.s, Q.l, B.j, B.k)
+  }
 }

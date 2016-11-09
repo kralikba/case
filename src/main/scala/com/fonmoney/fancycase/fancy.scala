@@ -25,7 +25,7 @@ object fancy {
     val companionTrait = typeOf[FancyTraitCompanion[_]]
 
     annottees.map(_.tree).toList match {
-      case q"${mods: Modifiers} class $name[..$tp] $cmods(...$cparams) extends { ..$early } with ..$parents { $self => ..$body }" :: xs
+      case q"${mods: Modifiers} class ${name : TypeName}[..$tp] $cmods(...$cparams) extends { ..$early } with ..$parents { $self => ..$body }" :: xs
         if (mods.hasFlag(Flag.CASE)) =>
         // case classes will get default implementations of @fancy traits
         val fancyTraits = {
@@ -39,11 +39,26 @@ object fancy {
               case _ => acc map { sym => resolveType(tq"$sym") }
             }
           }
-          linearize(ptpe, List()) filter { t =>
+          val linearized = linearize(ptpe, List()) filter { t =>
             if(t.companion =:= NoType) false
             else t.companion <:< companionTrait
           }
+
+          // Check if the direct parents appear in the same order as their linearization order.
+          // Emit a warning, if not.
+          {
+            val fancyParents = ptpe filter { linearized contains _ }
+            val fancyParentsOrd = linearized filter { fancyParents contains _ }
+            if (fancyParents != fancyParentsOrd) {
+              c.warning(parents.head.pos,
+                s"@fancy supertypes do not appear in their linearization order." +
+                  s"This might cause confusion regarding $name's constructor's, $name.apply's and $name.fromComponent's parameter order." +
+                  s"Their correct ordering is: ${fancyParentsOrd.mkString(" with ")}.")
+            }
+          }
+          linearized
         }
+
         val fieldsByTrait = fancyTraits map { t =>
           val fields = t
             .companion
@@ -52,6 +67,7 @@ object fancy {
             .paramLists.head map { _.asTerm }
           (t, fields)
         }
+
         val cparams1 : Seq[Seq[Tree]] = {
           val add : Seq[Tree] = {
             fieldsByTrait
@@ -62,25 +78,59 @@ object fancy {
           if(cparams.isEmpty) Seq(add)
           else (cparams.head ++ add) +: cparams.tail
         }
-        val body1 = withReservedTypeNames(TypeName("Self"))(body : _*) {
-          val selfType = q"override type Self = $name";
-          val replaceDefs = fieldsByTrait map { case (t, fields) =>
-            val replaceName = {
-              val TypeName(n) = t.typeSymbol.name
-              TermName(replacePrefix + n)
-            }
-            val copyParams = fields map { f => q"${f.name} = ${f.name}" }
-            val params = fields map { f => q"${Modifiers(Flag.PARAM)} val ${f.name} : ${f.typeSignature}" }
-            q"override def $replaceName(..$params) = copy(..$copyParams)"
+
+        val companion = {
+          xs.headOption.getOrElse(q"object ${name.toTermName}") match {
+            case q"$mods object $cname extends { ..$early } with ..$cparents { $cs => ..$cb }" =>
+              val cb1 = withReservedTermNames("fromComponents")(cb : _*) {
+                val fromComponents = {
+                  val ts = fieldsByTrait map { case (t, f) =>
+                    (t, f, t.typeSymbol.name.toTermName)
+                  }
+                  val cp0 : Seq[Tree] = ((cparams : Seq[Seq[Tree]]).headOption.getOrElse(Seq[Tree]()))
+                  val formalph = cp0 ++ {
+                    ts map { case (t, _, n) =>
+                      q"${Modifiers(Flag.PARAM)} val $n : $t"
+                    }
+                  }
+                  val concph = (cp0 map { case q"$_ val $n : $_" => q"$n" }) ++ {
+                    ts flatMap { case (_, f, n) => f map { case fn => q"$n.${fn.name}"} }
+                  }
+                  val (formalp, concp) = (cparams : Seq[Seq[Tree]]) match {
+                    case Seq() => (Seq(formalph), Seq(concph))
+                    case ss => (
+                      formalph +: ss.tail,
+                      concph +: (ss.tail map { _ map { case q"$_ val $n : $_" => q"$n"
+                    }}))
+                  }
+
+                  q"def fromComponents(...$formalp) = new $name(...$concp)"
+                }
+                fromComponents +: cb
+              }
+              q"$mods object $cname extends { ..$early } with ..$cparents { $cs => ..$cb1 }"
           }
-          replaceDefs ++: selfType +: body
         }
 
         val main = {
+          val body1 = withReservedTypeNames(TypeName("Self"))(body : _*) {
+            val selfType = q"override type Self = $name";
+            val replaceDefs = fieldsByTrait map { case (t, fields) =>
+              val replaceName = {
+                val TypeName(n) = t.typeSymbol.name
+                TermName(replacePrefix + n)
+              }
+              val copyParams = fields map { f => q"${f.name} = ${f.name}" }
+              val params = fields map { f => q"${Modifiers(Flag.PARAM)} val ${f.name} : ${f.typeSignature}" }
+              q"override def $replaceName(..$params) = copy(..$copyParams)"
+            }
+            replaceDefs ++: selfType +: body
+          }
+
           q"$mods class $name[..$tp] $cmods(...$cparams1) extends { ..$early } with ..$parents { $self => ..$body1}"
         }
 
-        c.Expr(q"..${main :: xs}")
+        c.Expr(q"$main;$companion")
       case (x @ q"${mods : Modifiers} trait $name[..$tparams] extends { ..$earlydefns } with ..$parents { $self => ..$body }") :: xs =>
         // examples for trait A { val i : Int; val j : String }
         if(tparams.length > 0) {

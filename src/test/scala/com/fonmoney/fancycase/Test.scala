@@ -4,22 +4,25 @@ import org.scalatest._
 /**
   * Created by kralikba on 2016.10.31..
   */
-@fancy case class C(f : Boolean) extends Q with A with B
-
 @fancy trait B {
   val j : Int
   val k : Int
 }
 
+@fancy case class _B() extends B
+
 @fancy trait A {
   val i : Int
   val s : String
 }
-object A
 
 @fancy trait Q extends A {
   val l : Long
 }
+
+@fancy case class _Q() extends Q
+
+@fancy case class C(f : Boolean) extends Q with A with B
 
 class Test extends FlatSpec with Matchers {
   val (f0, i0, s0, l0, j0, k0) = (true, 4, "5", 6L, 7, 8)
@@ -58,4 +61,16 @@ class Test extends FlatSpec with Matchers {
     ra * (14, "15") shouldBe C(f0, 14, "15", l0, j0, k0)
   }
 
+  it should "generate correct fromComponents methods" in {
+    val q = _Q.fromComponents(c, c)
+    q.i shouldBe i0
+    q.s shouldBe s0
+    q.l shouldBe l0
+    val b = _B.fromComponents(c)
+    b.j shouldBe j0
+    b.k shouldBe k0
+
+    val c1 = C.fromComponents(c.f, q, q, b)
+    c1 shouldBe c
+  }
 }
