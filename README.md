@@ -1,6 +1,6 @@
 # case
 
-Imagine that you could harness the power of runtime polymorphism for `case class`es. 
+Imagine that you could harness the power of runtime polymorphism for `case class`es and not even having to write boilerplate. 
 
 ```scala
  @fancy trait A {
