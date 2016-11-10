@@ -64,3 +64,8 @@ libraryDependencies <++= scalaVersion(version => Seq(
 ))
 ```
 
+To do
+-----
+
+- [ ] default parameters
+- [ ] varargs
