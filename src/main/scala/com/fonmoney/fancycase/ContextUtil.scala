@@ -5,7 +5,7 @@ import scala.reflect.macros.whitebox.Context
 /**
   * Created by kralikba on 2016.11.03..
   */
-case class TreesUtil[C <: Context](context : C) {
+case class ContextUtil[C <: Context](context : C) {
   import context.universe._
 
   //HACK; what is the idiomatic way to resolve a type?
@@ -80,4 +80,16 @@ case class TreesUtil[C <: Context](context : C) {
   def valdefToIdent(t : Tree) = {
     q"${valdefToName(t)}"
   }
+
+  implicit class ModifierOps(mods : Modifiers) {
+    def &~(rhs: FlagSet) : Modifiers = { //YUCK
+      Modifiers(
+        (mods.flags.asInstanceOf[Long] & ~rhs.asInstanceOf[Long]).asInstanceOf[FlagSet],
+        mods.privateWithin,
+        mods.annotations
+      )
+    }
+  }
+
+  final val modParam : Modifiers = Modifiers(Flag.PARAM)
 }

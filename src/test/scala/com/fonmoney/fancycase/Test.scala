@@ -14,10 +14,12 @@ import org.scalatest._
 @fancy trait A {
   val i : Int
   val s : String
+  abstract val e : Boolean = false
 }
 
 @fancy trait Q extends A {
   val l : Long
+  abstract val d : Double = 3.14
 }
 
 @fancy case class _Q() extends Q
@@ -42,10 +44,10 @@ class Test extends FlatSpec with Matchers {
     j shouldBe j0
     k shouldBe k0
 
-    val Q(l, _) = c
+    val Q((l, _), _) = c
     l shouldBe l0
 
-    val A((i, s), _) = c
+    val A((i, s, _), _) = c
     i shouldBe i0
     s shouldBe s0
   }
@@ -74,11 +76,25 @@ class Test extends FlatSpec with Matchers {
     c1 shouldBe c
   }
 
-  it should "handle default parameter values correctly" in {
+  it should "handle case classes' default parameter values correctly" in {
     c.x shouldBe false
     C.fromComponents(c.f, c, c, c).x shouldBe false
     val c1 = C.fromComponents(c.f, c, c, c, true)
     c1.x shouldBe true
     c1 shouldBe C(f0, i0, s0, l0, j0, k0, true)
+  }
+
+  it should "handle traits' abstract vals' default values correctly" in {
+    c.e shouldBe false
+    c.d shouldBe 3.14
+    val c1 = C(f0, i0, s0, l0, j0, k0, false, true, 6.28)
+    c1.e shouldBe true
+    c1.d shouldBe 6.28
+    val c2 = C(f0, i0, s0, l0, j0, k0, d = 6.28)
+    c2.e shouldBe false
+    c2.d shouldBe 6.28
+    (c : Q).withQ(l0) shouldBe c
+    c.withQ(l0) shouldBe c
+    c.withQ(l0, 6.28) shouldBe c2
   }
 }

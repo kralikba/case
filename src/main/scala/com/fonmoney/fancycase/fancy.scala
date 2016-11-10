@@ -19,7 +19,7 @@ object fancy {
   def impl(c : Context)(annottees : c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
-    val util = TreesUtil[c.type](c)
+    val util = ContextUtil[c.type](c)
     import util._
 
     val companionTrait = typeOf[FancyTraitCompanion[_]]
@@ -61,8 +61,8 @@ object fancy {
             val fancyParentsOrd = linearized filter { fancyParents contains _ }
             if (fancyParents != fancyParentsOrd) {
               c.warning(parents.head.pos,
-                s"@fancy supertypes do not appear in their linearization order." +
-                  s"This might cause confusion regarding $name's constructor's, $name.apply's and $name.fromComponent's parameter order." +
+                s"@fancy supertypes do not appear in their linearization order. " +
+                  s"This might cause confusion regarding $name's constructor's, $name.apply's and $name.fromComponent's parameter order. " +
                   s"Their correct ordering is: ${fancyParentsOrd.mkString(" with ")}.")
             }
           }
@@ -70,22 +70,31 @@ object fancy {
         }
 
         val fieldsByTrait = fancyTraits map { t =>
-          val fields = t
+          val params = t
             .companion
             .member(TermName("Repr")).typeSignature
             .member(TermName("apply")).typeSignature
-            .paramLists.head map { _.asTerm }
-          (t, fields)
+            .paramLists.head
+          val fields = params map { _.asTerm }
+          val defaults = fields.zipWithIndex.map { _ match {
+              case (sym, ord) if sym.isParamWithDefault =>
+                //TODO: overriding default values - how should that work at all?
+                Some[Tree](q"${t.typeSymbol.companion}.Repr.${TermName("apply$default$" + (ord+1).toString)}")
+              case _ => None
+            }
+          }
+          (t, fields, defaults)
         }
 
-        val cparams1 : Seq[Seq[Tree]] = { //TODO: parameters with default values to be moved to end of parameter list.
-          val add : Seq[Tree] = {
-            fieldsByTrait
-            .map { _._2 }
-            .flatten
-            .map { sym => q"val ${sym.name.toTermName} : ${sym.typeSignature}"}
+        val cparams1 : Seq[Seq[Tree]] = {
+          val all = fieldsByTrait.flatMap { t => t._2 zip t._3 }
+          val mandatory : Seq[Tree] = all.collect { case (sym, None) =>
+            q"val ${sym.name.toTermName} : ${sym.typeSignature}"
           }
-          (caseparams ++ add ++ caseparamsWithDefault) +: cparamsstail
+          val optional : Seq[Tree] = all.collect { case (sym, Some(default)) =>
+            q"override val ${sym.name.toTermName} : ${sym.typeSignature} = $default"
+          }
+          (caseparams ++ mandatory ++ caseparamsWithDefault ++ optional) +: cparamsstail
         }
 
         val companion = {
@@ -93,22 +102,29 @@ object fancy {
             case q"$mods object $cname extends { ..$early } with ..$cparents { $cs => ..$cb }" =>
               val cb1 = withReservedTermNames("fromComponents")(cb : _*) {
                 val fromComponents = {
-                  val ts = fieldsByTrait map { case (t, f) =>
-                    (t, f, t.typeSymbol.name.toTermName)
+                  val ts = fieldsByTrait map { case (tpe, fields, defaults) =>
+                    (tpe, fields zip defaults, tpe.typeSymbol.name.toTermName)
                   }
 
                   val formalParamss = {
-                    (caseparams ++ {
-                      ts map { case (t, _, n) =>
-                        q"${Modifiers(Flag.PARAM)} val $n : $t"
-                      }
-                    } ++ caseparamsWithDefault) +: cparamsstail
+                    (caseparams ++
+                      ts.map { case (tpe, _, name) => q"$modParam val $name : $tpe" } ++
+                      caseparamsWithDefault) +:
+                    cparamsstail
                   }
 
                   val concreteParamss = {
-                    ((caseparams map valdefToIdent) ++ {
-                      ts flatMap { case (_, f, n) => f map { case fn => q"$n.${fn.name}" } }
-                    } ++ (caseparamsWithDefault map valdefToIdent)) +: (cparamsstail map { _ map valdefToIdent})
+                    val (withDefaults, withoutDefaults) = ts
+                      .flatMap { case (_, fields, tpeName) =>
+                        fields map { case (fn,default) => (q"$tpeName.${fn.name}", default) }
+                      }
+                      .partition(_._2.isDefined)
+
+                    (caseparams.map(valdefToIdent) ++
+                      withoutDefaults.map(_._1) ++
+                      caseparamsWithDefault.map(valdefToIdent) ++
+                      withDefaults.map(_._1)) +:
+                    (cparamsstail map { _ map valdefToIdent})
                   }
 
                   q"def fromComponents(...$formalParamss) : $name = new $name(...$concreteParamss)"
@@ -122,14 +138,17 @@ object fancy {
         val main = {
           val body1 = withReservedTypeNames(TypeName("Self"))(body : _*) {
             val selfType = q"override type Self = $name";
-            val replaceDefs = fieldsByTrait map { case (t, fields) =>
+            val replaceDefs = fieldsByTrait map { case (t, fields, defaults) =>
               val replaceName = {
                 val TypeName(n) = t.typeSymbol.name
                 TermName(replacePrefix + n)
               }
-              val copyParams = fields map { f => q"${f.name} = ${f.name}" }
-              val params = fields map { f => q"${Modifiers(Flag.PARAM)} val ${f.name} : ${f.typeSignature}" }
-              q"override def $replaceName(..$params) = copy(..$copyParams)"
+              val concreteParams = fields map { f => q"${f.name} = ${f.name}" }
+              val formalParams = (fields zip defaults) map {
+                case (f, Some(default)) => q"$modParam val ${f.name} : ${f.typeSignature} = $default"
+                case (f, _) => q"$modParam val ${f.name} : ${f.typeSignature}"
+              }
+              q"override def $replaceName(..$formalParams) = copy(..$concreteParams)"
             }
             replaceDefs ++: selfType +: body
           }
@@ -138,21 +157,49 @@ object fancy {
         }
 
         c.Expr(q"$main;$companion")
-      case (x @ q"${mods : Modifiers} trait $name[..$tparams] extends { ..$earlydefns } with ..$parents { $self => ..$body }") :: xs =>
+      case (x @ q"${_mods} trait $name[..$tparams] extends { ..$earlydefns } with ..$parents { $self => ..$body }") :: xs =>
         // examples for trait A { val i : Int; val j : String }
+        val mods = _mods.asInstanceOf[Modifiers]
         if(tparams.length > 0) {
           throw new NotImplementedError("Generic @fancy traits not supported yet.")
         }
+
         val decomposeName = TermName(decomposePrefix + name.toString())
         val replaceName = TermName(replacePrefix + name.toString())
         val tname = (name : TypeName).toTermName
         val pname = c.enclosingPackage.symbol //TODO: deprecated
         val companionName = q"$pname.$tname"
-        val fields = body collect {   //ex: (i, Int), (j, String)
-          case t @ q"$_ val $name : $tpe = $body" if body.isEmpty => (name, tpe)
+
+        val fields = {
+          val vals = body collect {
+            case v @ q"$mods val $_  : $_ = $rhs" if mods.hasFlag(Flag.ABSTRACT) || rhs.isEmpty => v.asInstanceOf[ValDef]
+          }
+
+          // Check that the abstract vals having default values are not succeeded by ones not having any.
+          // If this is false, issue a warning.
+          vals.dropWhile( _.rhs.isEmpty ).collectFirst {
+            case v if v.rhs.isEmpty =>
+              c.error(v.pos, "Optional fields must never precede any mandatory ones.")
+          }
+
+          vals map {
+            // (name, tpe, defaultValue : Tree)
+            case q"$_ val $name : $tpe" => (name, tpe, None)
+            case q"$_ val $name : $tpe = $rhs" => (name, tpe, Some(rhs))
+          }
+        }
+
+        val body0 = body map { // abstract vals with values are disallowed
+          case q"$mods val $n : $t = $v" if mods.hasFlag(Flag.ABSTRACT) => q"${mods &~ Flag.ABSTRACT} val $n : $t = $v"
+          case x => x
         }
         val fieldNames = fields map { _._1 }
         val fieldTypes = fields map { _._2 }
+        val fieldsAsParams = {
+          (fields collect { case (name, tpe, None) => q"$modParam val $name : $tpe" }) ++
+          (fields collect { case (name, tpe, Some(default)) => q"$modParam val $name : $tpe = $default" })
+        }
+
 
         val companion = {
           //COMPANION
@@ -182,16 +229,15 @@ object fancy {
                   withReservedTypeNames(TypeName("Repr"))(cbody: _*) {
                     val repr = {
                       val hcons = typeOf[shapeless.::[_,_]].typeSymbol
-                      val t = fields.foldRight(tq"${typeTag[HNil].tpe}") { case ((_, h), t) => tq"$hcons[$h, $t]" }
+                      val t = fields.foldRight(tq"${typeTag[HNil].tpe}") { case ((_, h, _), t) => tq"$hcons[$h, $t]" }
                       q"type Repr = $t"
                     }
                     val createRepr = {
-                      val params = fields map { case (name, tpe) => q"${Modifiers(Flag.PARAM)} val $name : $tpe" }
-                      val asRepr = fields.foldRight(q"${typeTag[HNil].tpe.typeSymbol.companion}") { case ((x, _), xs) => q"$xs.::($x)" }
-                      q"object Repr { def apply(..$params) : Repr = $asRepr }"
+                      val asRepr = fields.foldRight(q"${typeTag[HNil].tpe.typeSymbol.companion}") { case ((x, _, _), xs) => q"$xs.::($x)" }
+                      q"object Repr { def apply(..$fieldsAsParams) : Repr = $asRepr }"
                     }
                     val unapply = {
-                      val params = fields map { case (name, tpe) => q"${Modifiers(Flag.PARAM)} val $name : $tpe = instance.$name" }
+                      val params = fields map { case (name, tpe, _) => q"$modParam val $name : $tpe = instance.$name" }
                       val tupleType = tq"(..$fieldTypes)"
                       val asTuple = q"(..${fieldNames map { n => q"instance.$n" }})"
                       q"def unapply[T <: $name](instance : T { type Self <: T }) : Option[($tupleType, Remainder[T])]= Some(($asTuple, instance.$decomposeName))"
@@ -208,7 +254,7 @@ object fancy {
 
                   val tbody1 = withReservedTermNames("$times")(tbody : _*) {
                     val timesWithParams = {
-                      val params = fields map { case (name, tpe) => q"${Modifiers(Flag.PARAM)} val $name : $tpe = $of.$name" }
+                      val params = fields map { case (name, tpe, _) => q"${Modifiers(Flag.PARAM)} val $name : $tpe = $of.$name" }
                       q"def *(..$params) : $tp = *(Repr(..$fieldNames))"
                     }
                     val timesRepr = q"def *(right : Repr) : $tp = $of.$replaceName(right)"
@@ -229,34 +275,21 @@ object fancy {
         //TRAIT
         val main = {
           val body1 =
-            withReservedTypeNames(TypeName("Self"))(body : _*) {
-              withReservedTermNames(decomposeName, replaceName)(body: _*) {
+            withReservedTypeNames(TypeName("Self"))(body0 : _*) {
+              withReservedTermNames(decomposeName, replaceName)(body0: _*) {
                 val selfType =  q"type Self >: this.type <: $name[..$tparams]" // it is absolutely OBLIGATORY to override this in every descendant
                 val decompose = q"lazy val $decomposeName : $companionName.Remainder[Self] = new $companionName.Remainder(this)"
-                val replace = {
-                  val params = fields map { case (name, tpe) => q"${Modifiers(Flag.PARAM)} val $name : $tpe"}
-                  q"def $replaceName(..$params) : Self"
-                }
+                val replace = q"def $replaceName(..$fieldsAsParams) : Self"
                 val replaceRepr = {
                   val hcons = typeOf[shapeless.::.type].termSymbol
                   val pat = fieldNames.foldRight[Tree]( pq"_" ) { (n, t) => pq"$hcons($n,$t)" }
                   q"def $replaceName(newValues : $companionName.Repr) : Self = { newValues match { case $pat => $replaceName(..$fieldNames)}}"
                 }
-                selfType +: decompose +: replace +: replaceRepr +: body
+                selfType +: decompose +: replace +: replaceRepr +: body0
               }
             }
 
-          val mods1 = { // clear the INTERFACE flag, if any.
-            val flags = {
-              import Flag._
-              Seq(TRAIT, ABSTRACT, FINAL, SEALED, PRIVATE, PROTECTED, LOCAL).foldLeft(NoFlags) {
-                (acc, f) =>
-                  if(mods.hasFlag(f)) acc | f
-                  else acc
-              }
-            }
-            Modifiers(flags, mods.privateWithin, mods.annotations)
-          }
+          val mods1 = mods &~ Flag.INTERFACE
 
           q"$mods1 trait $name[..$tparams] extends { ..$earlydefns } with ..$parents { $self => ..$body1 }"
         }
