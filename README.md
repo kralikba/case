@@ -57,11 +57,6 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.fu
 
 resolvers += "jitpack" at "https://jitpack.io"
 libraryDependencies += "com.github.fonmoney" % "case" % "<commit id>"
-
-libraryDependencies <++= scalaVersion(version => Seq(
-  "org.scala-lang" % "scala-reflect" % version,
-  "com.chuusai" %% "shapeless" % "2.3.2"
-))
 ```
 
 To do

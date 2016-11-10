@@ -97,4 +97,8 @@ class Test extends FlatSpec with Matchers {
     c.withQ(l0) shouldBe c
     c.withQ(l0, 6.28) shouldBe c2
   }
+
+  it should "generate correct equalsIn* methods" in {
+    c.withB(11,12).equalsInQ(c)
+  }
 }

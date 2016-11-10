@@ -40,6 +40,10 @@ trait A {
     * `r * (i, s)` will be equivalent to `x.withA(i,s)`
     **/
   def withoutA: A.Remainder[Self] = new A.Remainder(this)
+
+  /** Determines whether two objects' fields (in A) are equal.
+    */
+  final def equalsInA(other : A) = i == other.i && s == other.s && e == other.e
 }
 object A extends FancyTraitCompanion[A] {
   type Repr = Int :: String :: HNil

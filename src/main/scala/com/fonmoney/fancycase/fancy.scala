@@ -166,6 +166,7 @@ object fancy {
 
         val decomposeName = TermName(decomposePrefix + name.toString())
         val replaceName = TermName(replacePrefix + name.toString())
+        val equalsInName = TermName("equalsIn" + name.toString())
         val tname = (name : TypeName).toTermName
         val pname = c.enclosingPackage.symbol //TODO: deprecated
         val companionName = q"$pname.$tname"
@@ -285,7 +286,11 @@ object fancy {
                   val pat = fieldNames.foldRight[Tree]( pq"_" ) { (n, t) => pq"$hcons($n,$t)" }
                   q"def $replaceName(newValues : $companionName.Repr) : Self = { newValues match { case $pat => $replaceName(..$fieldNames)}}"
                 }
-                selfType +: decompose +: replace +: replaceRepr +: body0
+                val equalsIn = {
+                  val expr = fieldNames.foldLeft(q"true" : Tree) { case (e, name) => q"(other.$name == $name) && $e" }
+                  q"def $equalsInName(other : $name) : Boolean = $expr"
+                }
+                selfType +: decompose +: replace +: replaceRepr +: equalsIn +: body0
               }
             }
 
