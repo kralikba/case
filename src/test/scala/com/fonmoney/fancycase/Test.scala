@@ -22,7 +22,7 @@ import org.scalatest._
 
 @fancy case class _Q() extends Q
 
-@fancy case class C(f : Boolean) extends Q with A with B
+@fancy case class C(f : Boolean, x : Boolean = false) extends Q with A with B
 
 class Test extends FlatSpec with Matchers {
   val (f0, i0, s0, l0, j0, k0) = (true, 4, "5", 6L, 7, 8)
@@ -72,5 +72,13 @@ class Test extends FlatSpec with Matchers {
 
     val c1 = C.fromComponents(c.f, q, q, b)
     c1 shouldBe c
+  }
+
+  it should "handle default parameter values correctly" in {
+    c.x shouldBe false
+    C.fromComponents(c.f, c, c, c).x shouldBe false
+    val c1 = C.fromComponents(c.f, c, c, c, true)
+    c1.x shouldBe true
+    c1 shouldBe C(f0, i0, s0, l0, j0, k0, true)
   }
 }

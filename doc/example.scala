@@ -71,14 +71,17 @@ object A extends FancyTraitCompanion[A] {
 }
 
 /** Then, a `@fancy case class` will automatically implement these traits.
-  * Their fields will be appended to the primary constructor's first parameter list, in order of linearization.
+  * Their fields will be inserted into the primary constructor's first parameter list, in order of linearization,
+  * between the mandatory and the optional parameters.
+  * A `fromComponents` method will also be added to the companion object, which is similar to the default apply method,
+  * but instead of the ancestor's fields, accepts instances of the ancestor fancy traits.
   **/
 
-@fancy case class C(f : Boolean) extends Q with A with B
+@fancy case class C(f : Boolean, x : Boolean = false) extends Q with A with B
 
 /** is equivalent to */
 
-case class C(f : Boolean, i : Int, s : String, l : Long, j : Int, k : Int) extends Q with A with B {
+case class C(f : Boolean, i : Int, s : String, l : Long, j : Int, k : Int, x : Boolean = false) extends Q with A with B {
   type Self = C
 
   override def withA(i : Int, s : String) = copy(i = i, s = s)
@@ -86,7 +89,7 @@ case class C(f : Boolean, i : Int, s : String, l : Long, j : Int, k : Int) exten
   override def withB(j : Int, k : Int) = copy(j = j, k = k)
 }
 object C {
-  def fromComponents(f : Boolean, A : A, Q : Q, B : B) = {
-    C(f, A.i, A.s, Q.l, B.j, B.k)
+  def fromComponents(f : Boolean, A : A, Q : Q, B : B, x : Boolean = false) = {
+    C(f, A.i, A.s, Q.l, B.j, B.k, x)
   }
 }

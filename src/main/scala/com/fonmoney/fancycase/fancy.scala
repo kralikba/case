@@ -24,10 +24,20 @@ object fancy {
 
     val companionTrait = typeOf[FancyTraitCompanion[_]]
 
-    annottees.map(_.tree).toList match {
-      case q"${mods: Modifiers} class ${name : TypeName}[..$tp] $cmods(...$cparams) extends { ..$early } with ..$parents { $self => ..$body }" :: xs
+    annottees.map(_.tree).toList match { // excessive type annotations are here to make the IntelliJ plugin a bit less grumpy. Will be removed in a future version.
+      case q"${mods: Modifiers} class ${name : TypeName}[..$tp] $cmods(...${_cparamss}) extends { ..$early } with ..$parents { $self => ..$body }" :: xs
         if (mods.hasFlag(Flag.CASE)) =>
-        // case classes will get default implementations of @fancy traits
+        val cparamss : Seq[Seq[Tree]] = _cparamss
+
+        val cparamsstail = {
+          if(cparamss.isEmpty) Seq[Seq[Tree]]()
+          else cparamss.tail
+        }
+
+        val (caseparams, caseparamsWithDefault) = cparamss
+          .headOption.getOrElse(Seq[Tree]())
+          .partition { case q"$_ val $_ : $_ = $rhs" => rhs == EmptyTree }
+
         val fancyTraits = {
           val ptpe = parents.map { p => resolveType(p) }.toList
           def linearize(types : List[Type], acc : List[TypeSymbol]) : List[Type] = {
@@ -68,15 +78,14 @@ object fancy {
           (t, fields)
         }
 
-        val cparams1 : Seq[Seq[Tree]] = {
+        val cparams1 : Seq[Seq[Tree]] = { //TODO: parameters with default values to be moved to end of parameter list.
           val add : Seq[Tree] = {
             fieldsByTrait
             .map { _._2 }
             .flatten
             .map { sym => q"val ${sym.name.toTermName} : ${sym.typeSignature}"}
           }
-          if(cparams.isEmpty) Seq(add)
-          else (cparams.head ++ add) +: cparams.tail
+          (caseparams ++ add ++ caseparamsWithDefault) +: cparamsstail
         }
 
         val companion = {
@@ -87,24 +96,22 @@ object fancy {
                   val ts = fieldsByTrait map { case (t, f) =>
                     (t, f, t.typeSymbol.name.toTermName)
                   }
-                  val cp0 : Seq[Tree] = ((cparams : Seq[Seq[Tree]]).headOption.getOrElse(Seq[Tree]()))
-                  val formalph = cp0 ++ {
-                    ts map { case (t, _, n) =>
-                      q"${Modifiers(Flag.PARAM)} val $n : $t"
-                    }
-                  }
-                  val concph = (cp0 map { case q"$_ val $n : $_" => q"$n" }) ++ {
-                    ts flatMap { case (_, f, n) => f map { case fn => q"$n.${fn.name}"} }
-                  }
-                  val (formalp, concp) = (cparams : Seq[Seq[Tree]]) match {
-                    case Seq() => (Seq(formalph), Seq(concph))
-                    case ss => (
-                      formalph +: ss.tail,
-                      concph +: (ss.tail map { _ map { case q"$_ val $n : $_" => q"$n"
-                    }}))
+
+                  val formalParamss = {
+                    (caseparams ++ {
+                      ts map { case (t, _, n) =>
+                        q"${Modifiers(Flag.PARAM)} val $n : $t"
+                      }
+                    } ++ caseparamsWithDefault) +: cparamsstail
                   }
 
-                  q"def fromComponents(...$formalp) = new $name(...$concp)"
+                  val concreteParamss = {
+                    ((caseparams map valdefToIdent) ++ {
+                      ts flatMap { case (_, f, n) => f map { case fn => q"$n.${fn.name}" } }
+                    } ++ (caseparamsWithDefault map valdefToIdent)) +: (cparamsstail map { _ map valdefToIdent})
+                  }
+
+                  q"def fromComponents(...$formalParamss) : $name = new $name(...$concreteParamss)"
                 }
                 fromComponents +: cb
               }

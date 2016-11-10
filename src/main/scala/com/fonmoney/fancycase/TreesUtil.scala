@@ -70,4 +70,14 @@ case class TreesUtil[C <: Context](context : C) {
       case (t, Some(n)) if n == name => t
     }
   }
+
+  def valdefToName(t : Tree) : TermName = {
+    t match {
+      case q"$_ val $n : $_ = $_" => n
+    }
+  }
+
+  def valdefToIdent(t : Tree) = {
+    q"${valdefToName(t)}"
+  }
 }
