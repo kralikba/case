@@ -143,11 +143,8 @@ object fancy {
                 val TypeName(n) = t.typeSymbol.name
                 TermName(replacePrefix + n)
               }
+              val formalParams = fields map { f => q"$modParam val ${f.name} : ${f.typeSignature} = ${f.name}"}
               val concreteParams = fields map { f => q"${f.name} = ${f.name}" }
-              val formalParams = (fields zip defaults) map {
-                case (f, Some(default)) => q"$modParam val ${f.name} : ${f.typeSignature} = $default"
-                case (f, _) => q"$modParam val ${f.name} : ${f.typeSignature}"
-              }
               q"override def $replaceName(..$formalParams) = copy(..$concreteParams)"
             }
             replaceDefs ++: selfType +: body
@@ -196,10 +193,7 @@ object fancy {
         }
         val fieldNames = fields map { _._1 }
         val fieldTypes = fields map { _._2 }
-        val fieldsAsParams = {
-          (fields collect { case (name, tpe, None) => q"$modParam val $name : $tpe" }) ++
-          (fields collect { case (name, tpe, Some(default)) => q"$modParam val $name : $tpe = $default" })
-        }
+
 
 
         val companion = {
@@ -234,8 +228,12 @@ object fancy {
                       q"type Repr = $t"
                     }
                     val createRepr = {
+                      val params = {
+                        (fields collect { case (name, tpe, None) => q"$modParam val $name : $tpe" }) ++
+                          (fields collect { case (name, tpe, Some(default)) => q"$modParam val $name : $tpe = $default" })
+                      }
                       val asRepr = fields.foldRight(q"${typeTag[HNil].tpe.typeSymbol.companion}") { case ((x, _, _), xs) => q"$xs.::($x)" }
-                      q"object Repr { def apply(..$fieldsAsParams) : Repr = $asRepr }"
+                      q"object Repr { def apply(..$params) : Repr = $asRepr }"
                     }
                     val unapply = {
                       val params = fields map { case (name, tpe, _) => q"$modParam val $name : $tpe = instance.$name" }
@@ -280,7 +278,10 @@ object fancy {
               withReservedTermNames(decomposeName, replaceName)(body0: _*) {
                 val selfType =  q"type Self >: this.type <: $name[..$tparams]" // it is absolutely OBLIGATORY to override this in every descendant
                 val decompose = q"lazy val $decomposeName : $companionName.Remainder[Self] = new $companionName.Remainder(this)"
-                val replace = q"def $replaceName(..$fieldsAsParams) : Self"
+                val replace = {
+                  val params = fields map { case (name,tpe, _) => q"$modParam val $name : $tpe = $name"}
+                  q"def $replaceName(..$params) : Self"
+                }
                 val replaceRepr = {
                   val hcons = typeOf[shapeless.::.type].termSymbol
                   val pat = fieldNames.foldRight[Tree]( pq"_" ) { (n, t) => pq"$hcons($n,$t)" }

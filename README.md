@@ -10,6 +10,7 @@ Imagine that you could harness the power of runtime polymorphism for `case class
  
  @fancy trait Q extends A {
    val l : Long
+   abstract val opt : Boolean = true
  }
  
  @fancy trait B {
@@ -40,11 +41,32 @@ val c1 = rem * (11,"12")
 c.f && c.i == 11 && c.s == "12" && c.l == 7L && c.j == 8 && c.k == 9
 ```
 
-That's right, this is true as well!
+That's right, this is true as well! There is even a "shortcut" similar to the case classes' `copy` methods:
+
+```scala
+val c2 = c1.withA(s = "12")
+c.f && c.i == 11 && c.s == "12" && c.l == 7L && c.j == 8 && c.k == 9
+```
+
+The fields can even have default values!
+
+```scala
+C(true, 5, "6", 7L, 8, 9, true) == c
+```
+
+And you even get an `equalsInX` method for every trait that compares only the fields of those traits:
+
+```scala
+c1.equalsInB(c) && c1.equalsInQ(c)
+``` 
 
 Cool, isn't it?
 
-A bit more detailed example can be found in [here](doc/example.scala)
+
+Complete example of the macro's output
+--------------------------------------
+
+See [doc/example.scala](doc/example.scala) and the macro's [ScalaTest suite](src/test/scala/com/fonmoney/fancycase/Test.scala).
 
 Dependencies
 ------------
@@ -62,4 +84,7 @@ libraryDependencies += "com.github.fonmoney" % "case" % "<commit id>"
 To do
 -----
 
+- [ ] proper docs
+- [ ] some info output to see a summary of @fancy-generated constructors and defs
+- [ ] varargs
 - [ ] overriding default values

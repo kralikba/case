@@ -30,7 +30,7 @@ trait A {
   type Self >: this.type <: A
 
   /** A copy of the current object such that everything is unchanged but values i and s */
-  def withA(i: Int, s: String, e : Boolean = false): Self
+  def withA(i: Int = i, s: String = s, e : Boolean = e): Self
 
   def withA(newValues: A.Repr): Self = newValues match {
     case i :: s :: e :: _ => withA(i, s)
@@ -101,9 +101,9 @@ case class C(f : Boolean,
              d : Double = Q.Repr.apply$defaults$2) extends Q with A with B {
   type Self = C
 
-  override def withA(i : Int, s : String, e : Boolean = A.Repr.apply$defaults$3) = copy(i = i, s = s)
-  override def withQ(l : Long, d : Double = Q.Repr.apply$defaults$2) = copy(l = l, d = d)
-  override def withB(j : Int, k : Int) = copy(j = j, k = k)
+  override def withA(i : Int = i, s : String = s, e : Boolean = e) = copy(i = i, s = s)
+  override def withQ(l : Long = l, d : Double = d) = copy(l = l, d = d)
+  override def withB(j : Int = j, k : Int = k) = copy(j = j, k = k)
 }
 object C {
   def fromComponents(f : Boolean, A : A, Q : Q, B : B, x : Boolean = false) = {

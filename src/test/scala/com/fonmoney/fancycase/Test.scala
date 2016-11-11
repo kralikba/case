@@ -39,6 +39,16 @@ class Test extends FlatSpec with Matchers {
     c.k shouldBe k0
   }
 
+  it should "generate correct with* methods" in {
+    c.withQ(l0+100, 6.28) equals c.copy(l = l0 + 100, d = 6.28)
+    c.withQ(l = l0+100) equals c.copy(l = l0 + 100)
+    c.withQ(d = 6.28) equals c.copy(d = 6.28)
+    val q : Q = c
+    q.withQ(l0+100, 6.28) equals c.copy(l = l0 + 100, d = 6.28)
+    q.withQ(l = l0+100) equals c.copy(l = l0 + 100)
+    q.withQ(d = 6.28) equals c.copy(d = 6.28)
+  }
+
   it should "generate correct unapply methods" in {
     val B((j, k), _) = c
     j shouldBe j0
@@ -93,9 +103,6 @@ class Test extends FlatSpec with Matchers {
     val c2 = C(f0, i0, s0, l0, j0, k0, d = 6.28)
     c2.e shouldBe false
     c2.d shouldBe 6.28
-    (c : Q).withQ(l0) shouldBe c
-    c.withQ(l0) shouldBe c
-    c.withQ(l0, 6.28) shouldBe c2
   }
 
   it should "generate correct equalsIn* methods" in {
