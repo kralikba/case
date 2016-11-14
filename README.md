@@ -16,7 +16,7 @@ Imagine that you could harness the power of runtime polymorphism for `case class
  @fancy trait B {
    val j : Int
    val k : Int
- }
+- }
 
  @fancy case class C(f : Boolean) extends Q with A with B
 ```
@@ -25,6 +25,7 @@ That's right, you don't have to manually implement `Q`, `A` and `B`!
 
 ```scala
 val c = C(true, 5, "6", 7L, 8, 9)
+
 c.f && c.i == 5 && c.s == "6" && c.l == 7L && c.j == 8 && c.k == 9
 ```
 
@@ -84,6 +85,7 @@ libraryDependencies += "com.github.fonmoney" % "case" % "<commit id>"
 To do
 -----
 
+- [ ] annotations on fields which are valid for parameters should appear wherever applicable (e.g. constructor parameter list, apply, ...)
 - [ ] proper docs
 - [ ] some info output to see a summary of @fancy-generated constructors and defs
 - [ ] varargs
