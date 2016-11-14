@@ -47,6 +47,9 @@ class Test extends FlatSpec with Matchers {
     q.withQ(l0+100, 6.28) equals c.copy(l = l0 + 100, d = 6.28)
     q.withQ(l = l0+100) equals c.copy(l = l0 + 100)
     q.withQ(d = 6.28) equals c.copy(d = 6.28)
+
+    val q1 = c.withQ(d = 55)
+    q1 equals c.withQ(q1)
   }
 
   it should "generate correct unapply methods" in {

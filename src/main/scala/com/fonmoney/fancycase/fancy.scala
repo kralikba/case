@@ -282,6 +282,10 @@ object fancy {
                   val params = fields map { case (name,tpe, _) => q"$modParam val $name : $tpe = $name"}
                   q"def $replaceName(..$params) : Self"
                 }
+                val replaceFrom = {
+                  val params = fields map { case (name, _, _) => q"$name = from.$name" }
+                  q"def $replaceName(from : $name) : Self = $replaceName(..$params)"
+                }
                 val replaceRepr = {
                   val hcons = typeOf[shapeless.::.type].termSymbol
                   val pat = fieldNames.foldRight[Tree]( pq"_" ) { (n, t) => pq"$hcons($n,$t)" }
@@ -291,7 +295,7 @@ object fancy {
                   val expr = fieldNames.foldLeft(q"true" : Tree) { case (e, name) => q"(other.$name == $name) && $e" }
                   q"def $equalsInName(other : $name) : Boolean = $expr"
                 }
-                selfType +: decompose +: replace +: replaceRepr +: equalsIn +: body0
+                selfType +: decompose +: replace +: replaceRepr +: replaceFrom +: equalsIn +: body0
               }
             }
 

@@ -32,6 +32,8 @@ trait A {
   /** A copy of the current object such that everything is unchanged but values i and s */
   def withA(i: Int = i, s: String = s, e : Boolean = e): Self
 
+  def withA(from : A) : Self = withA(from.i, from.s, from.e)
+
   def withA(newValues: A.Repr): Self = newValues match {
     case i :: s :: e :: _ => withA(i, s)
   }
