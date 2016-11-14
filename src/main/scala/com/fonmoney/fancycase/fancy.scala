@@ -273,11 +273,13 @@ object fancy {
         }
         //TRAIT
         val main = {
+          val decomposeBackingValName = TermName("_" + decomposeName.toString)
           val body1 =
             withReservedTypeNames(TypeName("Self"))(body0 : _*) {
               withReservedTermNames(decomposeName, replaceName)(body0: _*) {
                 val selfType =  q"type Self >: this.type <: $name[..$tparams]" // it is absolutely OBLIGATORY to override this in every descendant
-                val decompose = q"lazy val $decomposeName : $companionName.Remainder[Self] = new $companionName.Remainder(this)"
+                val decomposeBackingVal = q"private lazy val $decomposeBackingValName : $companionName.Remainder[Self] = new $companionName.Remainder(this)"
+                val decompose = q"def $decomposeName : $companionName.Remainder[Self] = $decomposeBackingValName"
                 val replace = {
                   val params = fields map { case (name,tpe, _) => q"$modParam val $name : $tpe = $name"}
                   q"def $replaceName(..$params) : Self"
@@ -295,7 +297,7 @@ object fancy {
                   val expr = fieldNames.foldLeft(q"true" : Tree) { case (e, name) => q"(other.$name == $name) && $e" }
                   q"def $equalsInName(other : $name) : Boolean = $expr"
                 }
-                selfType +: decompose +: replace +: replaceRepr +: replaceFrom +: equalsIn +: body0
+                selfType +: decomposeBackingVal +: decompose +: replace +: replaceRepr +: replaceFrom +: equalsIn +: body0
               }
             }
 
