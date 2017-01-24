@@ -21,7 +21,7 @@ Imagine that you could harness the power of runtime polymorphism for `case class
  @fancy case class C(f : Boolean) extends Q with A with B
 ```
 
-That's right, you don't have to manually implement `Q`, `A` and `B`!
+That's right, you don't have to manually override `Q`, `A` and `B`!
 
 ```scala
 val c = C(true, 5, "6", 7L, 8, 9)

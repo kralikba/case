@@ -95,12 +95,12 @@ object A extends FancyTraitCompanion[A] {
 /** is equivalent to */
 
 case class C(f : Boolean,
-             i : Int, s : String,
-             l : Long,
-             j : Int, k : Int,
-             x : Boolean = false,
-             e : Boolean = A.Repr.apply$defaults$3,
-             d : Double = Q.Repr.apply$defaults$2) extends Q with A with B {
+             override i : Int, override s : String,
+             override l : Long,
+             override j : Int, override k : Int,
+             override x : Boolean = false,
+             override e : Boolean = A.Repr.apply$defaults$3,
+             override d : Double = Q.Repr.apply$defaults$2) extends Q with A with B {
   type Self = C
 
   override def withA(i : Int = i, s : String = s, e : Boolean = e) = copy(i = i, s = s)

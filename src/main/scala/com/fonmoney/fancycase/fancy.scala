@@ -89,7 +89,7 @@ object fancy {
         val cparams1 : Seq[Seq[Tree]] = {
           val all = fieldsByTrait.flatMap { t => t._2 zip t._3 }
           val mandatory : Seq[Tree] = all.collect { case (sym, None) =>
-            q"val ${sym.name.toTermName} : ${sym.typeSignature}"
+            q"override val ${sym.name.toTermName} : ${sym.typeSignature}"
           }
           val optional : Seq[Tree] = all.collect { case (sym, Some(default)) =>
             q"override val ${sym.name.toTermName} : ${sym.typeSignature} = $default"
