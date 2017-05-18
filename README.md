@@ -16,7 +16,7 @@ Imagine that you could harness the power of runtime polymorphism for `case class
  @fancy trait B {
    val j : Int
    val k : Int
-- }
+ }
 
  @fancy case class C(f : Boolean) extends Q with A with B
 ```
